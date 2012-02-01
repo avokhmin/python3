@@ -441,10 +441,13 @@ rm -rf $RPM_BUILD_ROOT
 
 
 %changelog
-* Sun Aug 14 2011 Funda Wang <fwang@mandriva.org> 3.2.1-2mdv2011.0
-+ Revision: 694448
+* Sun Aug 14 2011 Funda Wang <fwang@mandriva.org> 3.2.1-2mdv2012.0
++ Revision: 694447
+- br automake
 - add requires exception
-- redif lib64 patch
+
+* Tue Jul 12 2011 Funda Wang <fwang@mandriva.org> 3.2.1-1
++ Revision: 689620
 - new version 3.2.1
 
 * Mon May 02 2011 Funda Wang <fwang@mandriva.org> 3.2-4
