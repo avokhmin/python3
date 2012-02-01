@@ -1,0 +1,295 @@
+--- Python-3.2.1/Include/pythonrun.h.lib64	2011-07-09 08:58:46.000000000 +0200
++++ Python-3.2.1/Include/pythonrun.h	2011-07-12 03:43:22.000000000 +0200
+@@ -175,6 +175,8 @@
+ /* In their own files */
+ PyAPI_FUNC(const char *) Py_GetVersion(void);
+ PyAPI_FUNC(const char *) Py_GetPlatform(void);
++PyAPI_FUNC(const char *) Py_GetArch(void);
++PyAPI_FUNC(const char *) Py_GetLib(void);
+ PyAPI_FUNC(const char *) Py_GetCopyright(void);
+ PyAPI_FUNC(const char *) Py_GetCompiler(void);
+ PyAPI_FUNC(const char *) Py_GetBuildInfo(void);
+--- Python-3.2.1/Lib/distutils/command/install.py.lib64	2011-07-09 08:58:46.000000000 +0200
++++ Python-3.2.1/Lib/distutils/command/install.py	2011-07-12 03:43:22.000000000 +0200
+@@ -27,6 +27,8 @@
+     from site import USER_SITE
+     HAS_USER_SITE = True
+ 
++libname = sys.lib
++
+ if sys.version < "2.2":
+     WINDOWS_SCHEME = {
+         'purelib': '$base',
+@@ -47,14 +49,14 @@
+ INSTALL_SCHEMES = {
+     'unix_prefix': {
+         'purelib': '$base/lib/python$py_version_short/site-packages',
+-        'platlib': '$platbase/lib/python$py_version_short/site-packages',
++        'platlib': '$platbase/'+libname+'/python$py_version_short/site-packages',
+         'headers': '$base/include/python$py_version_short$abiflags/$dist_name',
+         'scripts': '$base/bin',
+         'data'   : '$base',
+         },
+     'unix_home': {
+         'purelib': '$base/lib/python',
+-        'platlib': '$base/lib/python',
++        'platlib': '$base/'+libname+'/python',
+         'headers': '$base/include/python/$dist_name',
+         'scripts': '$base/bin',
+         'data'   : '$base',
+--- Python-3.2.1/Lib/distutils/sysconfig.py.lib64	2011-07-09 08:58:47.000000000 +0200
++++ Python-3.2.1/Lib/distutils/sysconfig.py	2011-07-12 03:43:22.000000000 +0200
+@@ -124,8 +124,12 @@
+         prefix = plat_specific and EXEC_PREFIX or PREFIX
+ 
+     if os.name == "posix":
++        if plat_specific:
++           lib = sys.lib
++        else:
++           lib = 'lib'
+         libpython = os.path.join(prefix,
+-                                 "lib", "python" + get_python_version())
++                                 lib, "python" + get_python_version())
+         if standard_lib:
+             return libpython
+         else:
+@@ -207,7 +211,8 @@
+         else:
+             inc_dir = project_base
+     else:
+-        inc_dir = get_python_inc(plat_specific=1)
++        prefix = EXEC_PREFIX or PREFIX
++        inc_dir = os.path.join(prefix, "include", "multiarch-" + sys.arch + "-linux", "python" + sys.version[:3])
+     if get_python_version() < '2.2':
+         config_h = 'config.h'
+     else:
+--- Python-3.2.1/Lib/distutils/tests/test_install.py.lib64	2011-07-09 08:58:47.000000000 +0200
++++ Python-3.2.1/Lib/distutils/tests/test_install.py	2011-07-12 03:43:22.000000000 +0200
+@@ -49,8 +49,9 @@
+             self.assertEqual(got, expected)
+ 
+         libdir = os.path.join(destination, "lib", "python")
++        platlibdir =  os.path.join(destination, sys.lib, "python")
+         check_path(cmd.install_lib, libdir)
+-        check_path(cmd.install_platlib, libdir)
++        check_path(cmd.install_platlib, platlibdir)
+         check_path(cmd.install_purelib, libdir)
+         check_path(cmd.install_headers,
+                    os.path.join(destination, "include", "python", "foopkg"))
+--- Python-3.2.1/Lib/site.py.lib64	2011-07-09 08:58:49.000000000 +0200
++++ Python-3.2.1/Lib/site.py	2011-07-12 03:43:22.000000000 +0200
+@@ -285,13 +285,17 @@
+         if sys.platform in ('os2emx', 'riscos'):
+             sitepackages.append(os.path.join(prefix, "Lib", "site-packages"))
+         elif os.sep == '/':
+-            sitepackages.append(os.path.join(prefix, "lib",
++            sitepackages.append(os.path.join(prefix, sys.lib,
+                                         "python" + sys.version[:3],
+                                         "site-packages"))
+-            sitepackages.append(os.path.join(prefix, "lib", "site-python"))
++            sitepackages.append(os.path.join(prefix, sys.lib, "site-python"))
++            if sys.lib != 'lib':
++                        sitepackages.append(os.path.join(prefix, 'lib',
++                                    "python" + sys.version[:3], "site-packages"))
++                        sitepackages.append(os.path.join(prefix, 'lib', "site-python"))
+         else:
+             sitepackages.append(prefix)
+-            sitepackages.append(os.path.join(prefix, "lib", "site-packages"))
++            sitepackages.append(os.path.join(prefix, sys.lib, "site-packages"))
+         if sys.platform == "darwin":
+             # for framework builds *only* we add the standard Apple
+             # locations.
+--- Python-3.2.1/Lib/sysconfig.py.lib64	2011-07-09 08:58:49.000000000 +0200
++++ Python-3.2.1/Lib/sysconfig.py	2011-07-12 03:43:22.000000000 +0200
+@@ -21,10 +21,10 @@
+ 
+ _INSTALL_SCHEMES = {
+     'posix_prefix': {
+-        'stdlib': '{base}/lib/python{py_version_short}',
+-        'platstdlib': '{platbase}/lib/python{py_version_short}',
++        'stdlib': '{base}/'+sys.lib+'/python{py_version_short}',
++        'platstdlib': '{platbase}/'+sys.lib+'/python{py_version_short}',
+         'purelib': '{base}/lib/python{py_version_short}/site-packages',
+-        'platlib': '{platbase}/lib/python{py_version_short}/site-packages',
++        'platlib': '{platbase}/'+sys.lib+'/python{py_version_short}/site-packages',
+         'include':
+             '{base}/include/python{py_version_short}{abiflags}',
+         'platinclude':
+@@ -81,10 +81,10 @@
+         'data'   : '{userbase}',
+         },
+     'posix_user': {
+-        'stdlib': '{userbase}/lib/python{py_version_short}',
+-        'platstdlib': '{userbase}/lib/python{py_version_short}',
++        'stdlib': '{userbase}/'+sys.lib+'/python{py_version_short}',
++        'platstdlib': '{userbase}/'+sys.lib+'/python{py_version_short}',
+         'purelib': '{userbase}/lib/python{py_version_short}/site-packages',
+-        'platlib': '{userbase}/lib/python{py_version_short}/site-packages',
++        'platlib': '{userbase}/'+sys.lib+'/python{py_version_short}/site-packages',
+         'include': '{userbase}/include/python{py_version_short}',
+         'scripts': '{userbase}/bin',
+         'data'   : '{userbase}',
+--- Python-3.2.1/Lib/test/test_site.py.lib64	2011-07-09 08:58:51.000000000 +0200
++++ Python-3.2.1/Lib/test/test_site.py	2011-07-12 03:43:22.000000000 +0200
+@@ -222,11 +222,14 @@
+             wanted = os.path.join('xoxo', 'Lib', 'site-packages')
+             self.assertEqual(dirs[0], wanted)
+         elif os.sep == '/':
+-            self.assertEqual(len(dirs), 2)
+-            wanted = os.path.join('xoxo', 'lib', 'python' + sys.version[:3],
++            if sys.lib != 'lib':
++               self.assertEqual(len(dirs), 4)
++            else:
++               self.assertEqual(len(dirs), 2)
++            wanted = os.path.join('xoxo', sys.lib, 'python' + sys.version[:3],
+                                   'site-packages')
+             self.assertEqual(dirs[0], wanted)
+-            wanted = os.path.join('xoxo', 'lib', 'site-python')
++            wanted = os.path.join('xoxo', sys.lib, 'site-python')
+             self.assertEqual(dirs[1], wanted)
+         else:
+             self.assertEqual(len(dirs), 2)
+--- Python-3.2.1/Makefile.pre.in.lib64	2011-07-09 08:58:52.000000000 +0200
++++ Python-3.2.1/Makefile.pre.in	2011-07-12 03:43:22.000000000 +0200
+@@ -90,7 +90,8 @@
+ 
+ # Machine-dependent subdirectories
+ MACHDEP=	@MACHDEP@
+-
++LIB=		@LIB@
++ARCH=		@ARCH@
+ # Install prefix for architecture-independent files
+ prefix=		@prefix@
+ 
+@@ -106,7 +107,7 @@
+ MANDIR=		@mandir@
+ INCLUDEDIR=	@includedir@
+ CONFINCLUDEDIR=	$(exec_prefix)/include
+-SCRIPTDIR=	$(prefix)/lib
++SCRIPTDIR=	@libdir@
+ ABIFLAGS=	@ABIFLAGS@
+ 
+ # Detailed destination directories
+@@ -611,7 +612,7 @@
+ Python/compile.o Python/symtable.o Python/ast.o: $(GRAMMAR_H) $(AST_H)
+ 
+ Python/getplatform.o: $(srcdir)/Python/getplatform.c
+-		$(CC) -c $(PY_CORE_CFLAGS) -DPLATFORM='"$(MACHDEP)"' -o $@ $(srcdir)/Python/getplatform.c
++		$(CC) -c $(PY_CORE_CFLAGS) -DPLATFORM='"$(MACHDEP)"' -DARCH='"$(ARCH)"' -DLIB='"$(LIB)"' -o $@ $(srcdir)/Python/getplatform.c
+ 
+ Python/importdl.o: $(srcdir)/Python/importdl.c
+ 		$(CC) -c $(PY_CORE_CFLAGS) -I$(DLINCLDIR) -o $@ $(srcdir)/Python/importdl.c
+--- Python-3.2.1/Modules/getpath.c.lib64	2011-07-09 08:58:54.000000000 +0200
++++ Python-3.2.1/Modules/getpath.c	2011-07-12 03:43:49.000000000 +0200
+@@ -121,9 +121,17 @@
+ #define EXEC_PREFIX PREFIX
+ #endif
+ 
++#ifndef LIB_PYTHON
++#if defined(__x86_64__) || defined(__powerpc64__)
++#define LIB_PYTHON L"lib64/python" VERSION
++#else
++#define LIB_PYTHON L"lib/python" VERSION
++#endif
++#endif
++
+ #ifndef PYTHONPATH
+-#define PYTHONPATH PREFIX "/lib/python" VERSION ":" \
+-              EXEC_PREFIX "/lib/python" VERSION "/lib-dynload"
++#define PYTHONPATH PREFIX "/" LIB_PYTHON ":" \
++              EXEC_PREFIX "/" LIB_PYTHON "/lib-dynload"
+ #endif
+ 
+ #ifndef LANDMARK
+@@ -135,7 +143,7 @@
+ static wchar_t progpath[MAXPATHLEN+1];
+ static wchar_t *module_search_path = NULL;
+ static int module_search_path_malloced = 0;
+-static wchar_t *lib_python = L"lib/python" VERSION;
++static wchar_t *lib_python = LIB_PYTHON;
+ 
+ static void
+ reduce(wchar_t *dir)
+--- Python-3.2.1/Python/getplatform.c.lib64	2011-07-09 08:58:56.000000000 +0200
++++ Python-3.2.1/Python/getplatform.c	2011-07-12 03:43:22.000000000 +0200
+@@ -10,3 +10,23 @@
+ {
+ 	return PLATFORM;
+ }
++
++#ifndef ARCH
++#define ARCH "unknown"
++#endif
++
++const char *
++Py_GetArch(void)
++{
++	return ARCH;
++}
++
++#ifndef LIB
++#define LIB "lib"
++#endif
++
++const char *
++Py_GetLib(void)
++{
++	return LIB;
++}
+--- Python-3.2.1/Python/sysmodule.c.lib64	2011-07-09 08:58:56.000000000 +0200
++++ Python-3.2.1/Python/sysmodule.c	2011-07-12 03:43:22.000000000 +0200
+@@ -1563,6 +1563,10 @@
+     SET_SYS_FROM_STRING("executable",
+                         PyUnicode_FromWideChar(
+                                Py_GetProgramFullPath(), -1));
++    SET_SYS_FROM_STRING("arch",
++			PyUnicode_FromString(Py_GetArch()));
++    SET_SYS_FROM_STRING("lib",
++			PyUnicode_FromString(Py_GetLib()));
+     SET_SYS_FROM_STRING("prefix",
+                         PyUnicode_FromWideChar(Py_GetPrefix(), -1));
+     SET_SYS_FROM_STRING("exec_prefix",
+--- Python-3.2.1/configure.in.lib64	2011-07-09 08:58:56.000000000 +0200
++++ Python-3.2.1/configure.in	2011-07-12 03:43:22.000000000 +0200
+@@ -592,6 +592,41 @@
+     esac;;
+ esac
+ 
++ARCH=`uname -m`
++case $ARCH in
++	i?86) ARCH=i386;;
++esac
++AC_MSG_RESULT($ARCH)
++AC_SUBST(ARCH)
++AC_MSG_CHECKING(ARCH)
++
++case $ac_sys_system in
++  Linux*)
++    # Test if the compiler is 64bit
++    echo 'int i;' > conftest.$ac_ext
++    python_cv_cc_64bit_output=no
++    if AC_TRY_EVAL(ac_compile); then
++	case `/usr/bin/file conftest.$ac_objext` in
++		*"ELF 64"*)
++			python_cv_cc_64bit_output=yes
++			;;
++		esac
++    fi
++    rm -rf conftest*
++    ;;
++esac
++
++case $ARCH:$python_cv_cc_64bit_output in
++	ppc64:yes | powerpc64:yes | s390x:yes | sparc64:yes | x86_64:yes)
++		LIB="lib64"
++		;;
++	*:*)
++		LIB="lib"
++		;;
++esac
++AC_MSG_RESULT($LIB)
++AC_SUBST(LIB)
++AC_MSG_CHECKING(LIB)
+ 
+ AC_SUBST(LIBRARY)
+ AC_MSG_CHECKING(LIBRARY)

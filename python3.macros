@@ -1,0 +1,10 @@
+%__python3 /usr/bin/python3
+%python3_sitelib %(%{__python3} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())")
+%python3_sitearch %(%{__python3} -c "from distutils.sysconfig import get_python_lib; print(get_python_lib(1))")
+%py3ver %(%{__python3} -V 2>&1 | cut -f2 -d" " | cut -f1,2 -d".")
+%python3_version %(%{__python3} -c "import sys; print(sys.version[0:3])")
+%py3_ver %(%{__python3} -c "import sys; v=sys.version_info[:2]; print('%%d.%%d'%%v)" 2>/dev/null || echo PYTHON-NOT-FOUND)
+%py3_prefix %(%{__python3} -c "import sys; print(sys.prefix)" 2>/dev/null || echo PYTHON-NOT-FOUND)
+%py3_platsitedir %python3_sitearch
+%py3_puresitedir %python3_sitelib
+%py3_incdir %(%{__python3} -c 'from distutils.sysconfig import get_python_inc; print(get_python_inc())' 2>/dev/null || echo PYTHON-INCLUDEDIR-NOT-FOUND)

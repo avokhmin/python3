@@ -1,0 +1,24 @@
+--- setup.py.link	2010-01-01 17:29:51.000000000 +0100
++++ setup.py	2010-10-31 17:33:25.000000000 +0100
+@@ -489,7 +489,7 @@
+         # Operations on audio samples
+         # According to #993173, this one should actually work fine on
+         # 64-bit platforms.
+-        exts.append( Extension('audioop', ['audioop.c']) )
++        exts.append( Extension('audioop', ['audioop.c'], libraries=math_libs) )
+ 
+         # readline
+         do_readline = self.compiler.find_library_file(lib_dirs, 'readline')
+@@ -1542,10 +1542,11 @@
+                         include_dirs=include_dirs,
+                         extra_compile_args=extra_compile_args,
+                         extra_link_args=extra_link_args,
+-                        libraries=[],
++                        libraries=['m', 'dl'],
+                         sources=sources,
+                         depends=depends)
+         ext_test = Extension('_ctypes_test',
++			     libraries=['m'],
+                              sources=['_ctypes/_ctypes_test.c'])
+         self.extensions.extend([ext, ext_test])
+ 
