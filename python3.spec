@@ -1,4 +1,4 @@
-%define docver  3.2.1
+%define docver  3.2.3
 %define dirver  3.2
 %define familyver 3
 
@@ -7,8 +7,6 @@
 %define lib_name	%mklibname python %{lib_major}
 %define develname	%mklibname python3 -d
 
-%define _requires_exceptions /usr/bin/python%{dirver}
-
 %ifarch %{ix86} x86_64 ppc
 %bcond_without	valgrind
 %else
@@ -16,8 +14,8 @@
 %endif
 Summary:	An interpreted, interactive object-oriented programming language
 Name:		python3
-Version:	3.2.1
-Release:	%mkrel 2
+Version:	3.2.3
+Release:	6
 License:	Modified CNRI Open Source License
 Group:		Development/Python
 
@@ -27,42 +25,39 @@ Source2:	python3.macros
 #Source4:	python-mode-1.0.tar.bz2
 
 Patch0:		python-3.1.2-module-linkage.patch
-Patch1:		python3-lib64.patch
-# fix http://bugs.python.org/issue6244
-# and https://qa.mandriva.com/show_bug.cgi?id=56260
-Patch2:     python-2.5-tcl86.patch
-# backported from svn
-Patch3:		python3-disable-pymalloc-on-valgrind.patch
+Patch1:		python3-3.2.3-fdr-lib64.patch
+Patch2:		python3-3.2.3-fdr-lib64-fix-for-test_install.patch
+Patch3:		python-3.2-CVE-2012-2135.patch
+Patch4:		python-3.2-bug14579-tests.diff
 
 URL:		http://www.python.org/
-Buildroot:	%{_tmppath}/%{name}-%{version}-%{release}-buildroot
 Conflicts:	tkinter3 < %{version}
 Conflicts:	%{lib_name}-devel < 3.1.2-4
-Conflicts:	%{develname} < 3.2-4
+Conflicts:	%{develname} < 3.2.2-3
 Requires:	%{lib_name} = %{version}
 BuildRequires:	blt
 BuildRequires:	db-devel
-BuildRequires:	expat-devel
+BuildRequires:	pkgconfig(expat)
 BuildRequires:	gdbm-devel
 BuildRequires:	gmp-devel
-BuildRequires:	ncursesw-devel
-BuildRequires:	openssl-devel
+BuildRequires:	pkgconfig(ncursesw)
+BuildRequires:	pkgconfig(openssl)
 BuildRequires:	readline-devel
 BuildRequires:	termcap-devel
 BuildRequires:	tcl tcl-devel
 BuildRequires:	tk tk-devel
-BuildRequires:	autoconf automake
-BuildRequires:  bzip2-devel
-BuildRequires:  sqlite3-devel
+BuildRequires:	autoconf
+BuildRequires:	bzip2-devel
+BuildRequires:	pkgconfig(sqlite3)
 # uncomment once the emacs part no longer conflict with python 2.X
 #BuildRequires:	emacs
 #BuildRequires:	emacs-bin
 %if %{with valgrind}
 BuildRequires:	valgrind-devel
 %endif
-Provides:       %{name} = %version
+Provides:	%{name} = %{version}
 Provides:	python(abi) = %{dirver}
-Buildroot:	%{_tmppath}/%{name}-%{version}-%{release}-root
+Provides:	/usr/bin/python%{dirver}mu
 
 
 %description
@@ -94,7 +89,7 @@ compared to Tcl, Perl, Scheme or Java.
 %package -n	%{develname}
 Summary:	The libraries and header files needed for Python development
 Group:		Development/Python
-Requires:	%{name} = %version
+Requires:	%{name} = %{version}
 Requires:	%{lib_name} = %{version}
 Provides:	%{name}-devel = %{version}-%{release}
 Provides:	%{lib_name_orig}-devel = %{version}-%{release}
@@ -114,9 +109,10 @@ documentation.
 
 %package	docs
 Summary:	Documentation for the Python programming language
-Requires:	%name = %version
-Requires:	xdg-utils
 Group:		Development/Python
+Requires:	%{name} = %{version}
+Requires:	xdg-utils
+BuildArch:	noarch
 
 %description	docs
 The python-docs package contains documentation on the Python
@@ -129,8 +125,8 @@ for the Python language.
 %package -n	tkinter3
 Summary:	A graphical user interface for the Python scripting language
 Group:		Development/Python
-Requires:	%name = %version
-Requires:       tcl tk
+Requires:	%{name} = %{version}
+Requires:	tcl tk
 
 %description -n	tkinter3
 The Tkinter (Tk interface) program is an graphical user interface for
@@ -142,7 +138,7 @@ user interface for Python programming.
 %package -n	tkinter3-apps
 Summary:	Various applications written using tkinter
 Group:		Development/Python
-Requires:   tkinter3
+Requires:	tkinter3
 
 %description -n	tkinter3-apps
 Various applications written using tkinter
@@ -150,10 +146,13 @@ Various applications written using tkinter
 %prep
 %setup -qn Python-%{version}
 %patch0 -p0 -b .link
-%patch1 -p1 -b .lib64
+%patch3 -p1 -b .CVE-2012-2135
+%patch4 -p1 -b .bug14579-tests
 
-#patch2 -p1
-#patch3 -p1 -b .valgrind~
+%if "%{_lib}" == "lib64"
+%patch1 -p1 -b .lib64
+%patch2 -p1
+%endif
 
 # docs
 mkdir html
@@ -161,7 +160,7 @@ bzcat %{SOURCE1} | tar x  -C html
 
 find . -type f -print0 | xargs -0 perl -p -i -e 's@/usr/local/bin/python@/usr/bin/python3@'
 
-cat > README.mdv << EOF
+cat > README.mga << EOF
 Python interpreter support readline completion by default.
 This is only used with the interpreter. In order to remove it,
 you can :
@@ -173,12 +172,18 @@ EOF
 %build
 rm -f Modules/Setup.local
 
-OPT="$RPM_OPT_FLAGS -g"
-export OPT
-autoreconf
+export OPT="%{optflags} -g"
+
+# to fix curses module build
+# https://bugs.mageia.org/show_bug.cgi?id=6702
+export CFLAGS="%{optflags} -I/usr/include/ncursesw"
+export CPPFLAGS="%{optflags} -I/usr/include/ncursesw"
+
+autoreconf -vfi
 %configure2_5x	--with-threads \
 		--enable-ipv6 \
 		--with-wide-unicode \
+		--with-dbmliborder=gdbm \
 		--enable-shared \
 %if %{with valgrind}
 		--with-valgrind
@@ -209,33 +214,32 @@ export TMP="/tmp" TMPDIR="/tmp"
 make test TESTOPTS="-w -l -x test_linuxaudiodev -x test_nis -x test_shutil -x test_pyexpat -x test_minidom -x test_sax -x test_string -x test_str -x test_unicode -x test_userstring -x test_bytes -x test_distutils -x test_mailbox -x test_ioctl -x test_telnetlib"
 
 %install
-rm -rf $RPM_BUILD_ROOT
-mkdir -p %buildroot%{_prefix}/lib/python%{dirver}
+mkdir -p %{buildroot}%{_prefix}/lib/python%{dirver}
 
 # fix Makefile to get rid of reference to distcc
 perl -pi -e "/^CC=/ and s/distcc/gcc/" Makefile
 
 # set the install path
 echo '[install_scripts]' >setup.cfg
-echo 'install_dir='"${RPM_BUILD_ROOT}/usr/bin" >>setup.cfg
+echo 'install_dir='"%{buildroot}%{_bindir}" >>setup.cfg
 
 # python is not GNU and does not know fsstd
-mkdir -p $RPM_BUILD_ROOT%{_mandir}
+mkdir -p %{buildroot}%{_mandir}
 %makeinstall_std LN="ln -sf"
 
-(cd $RPM_BUILD_ROOT%{_libdir}; ln -sf `ls libpython%{lib_major}*.so.*` libpython%{lib_major}.so)
+(cd %{buildroot}%{_libdir}; ln -sf `ls libpython%{lib_major}*.so.*` libpython%{lib_major}.so)
 
 # fix files conflicting with python2.6
-mv $RPM_BUILD_ROOT/%{_bindir}/2to3 $RPM_BUILD_ROOT/%{_bindir}/python3-2to3
+mv %{buildroot}%{_bindir}/2to3 %{buildroot}%{_bindir}/python3-2to3
 
 # conflicts with python2
 # # emacs, I use it, I want it
-# mkdir -p $RPM_BUILD_ROOT%{_datadir}/emacs/site-lisp
-# install -m 644 Misc/python-mode.el $RPM_BUILD_ROOT%{_datadir}/emacs/site-lisp
-# emacs -batch -f batch-byte-compile $RPM_BUILD_ROOT%{_datadir}/emacs/site-lisp/python-mode.el
+# mkdir -p %{buildroot}%{_datadir}/emacs/site-lisp
+# install -m 644 Misc/python-mode.el %{buildroot}%{_datadir}/emacs/site-lisp
+# emacs -batch -f batch-byte-compile %{buildroot}%{_datadir}/emacs/site-lisp/python-mode.el
 # 
-# install -d $RPM_BUILD_ROOT%{_sysconfdir}/emacs/site-start.d
-# cat <<EOF >$RPM_BUILD_ROOT%{_sysconfdir}/emacs/site-start.d/%{name}.el
+# install -d %{buildroot}%{_sysconfdir}/emacs/site-start.d
+# cat <<EOF >%{buildroot}%{_sysconfdir}/emacs/site-start.d/%{name}.el
 # (setq auto-mode-alist (cons '("\\\\.py$" . python-mode) auto-mode-alist))
 # (autoload 'python-mode "python-mode" "Mode for python files." t)
 # EOF
@@ -243,23 +247,23 @@ mv $RPM_BUILD_ROOT/%{_bindir}/2to3 $RPM_BUILD_ROOT/%{_bindir}/python3-2to3
 #"  this comment is just here because vim syntax higlighting is confused by the previous snippet of lisp
 
 # install pynche as pynche3
-cat << EOF > $RPM_BUILD_ROOT%{_bindir}/pynche3
+cat << EOF > %{buildroot}%{_bindir}/pynche3
 #!/bin/bash
 exec %{_libdir}/python%{dirver}/site-packages/pynche/pynche
 EOF
 rm -f Tools/pynche/*.pyw
-cp -r Tools/pynche $RPM_BUILD_ROOT%{_libdir}/python%{dirver}/site-packages/
+cp -r Tools/pynche %{buildroot}%{_libdir}/python%{dirver}/site-packages/
 
-chmod 755 $RPM_BUILD_ROOT%{_bindir}/{idle3,pynche3}
+chmod 755 %{buildroot}%{_bindir}/{idle3,pynche3}
 
 ln -f Tools/pynche/README Tools/pynche/README.pynche
 
 %if %{with valgrind}
-install Misc/valgrind-python.supp -D $RPM_BUILD_ROOT%{_libdir}/valgrind/valgrind-python3.supp
+install Misc/valgrind-python.supp -D %{buildroot}%{_libdir}/valgrind/valgrind-python3.supp
 %endif
 
-mkdir -p $RPM_BUILD_ROOT%{_datadir}/applications
-cat > $RPM_BUILD_ROOT%{_datadir}/applications/mandriva-tkinter3.desktop << EOF
+mkdir -p %{buildroot}%{_datadir}/applications
+cat > %{buildroot}%{_datadir}/applications/mandriva-tkinter3.desktop << EOF
 [Desktop Entry]
 Name=IDLE
 Comment=IDE for Python3
@@ -271,11 +275,11 @@ Categories=Development;IDE;
 EOF
 
 
-cat > $RPM_BUILD_ROOT%{_datadir}/applications/mandriva-%{name}-docs.desktop << EOF
+cat > %{buildroot}%{_datadir}/applications/mandriva-%{name}-docs.desktop << EOF
 [Desktop Entry]
 Name=Python documentation
 Comment=Python complete reference
-Exec=%{_bindir}/xdg-open %_defaultdocdir/%{name}-docs/index.html
+Exec=%{_bindir}/xdg-open %{_defaultdocdir}/%{name}-docs/index.html
 Icon=documentation_section
 Terminal=false
 Type=Application
@@ -284,14 +288,15 @@ EOF
 
 
 # fix non real scripts
-chmod 644 $RPM_BUILD_ROOT%{_libdir}/python*/test/test_{binascii,grp,htmlparser}.py*
+#chmod 644 %{buildroot}%{_libdir}/python*/test/test_{binascii,grp,htmlparser}.py*
+find %{buildroot} -type f \( -name "test_binascii.py*" -o -name "test_grp.py*" -o -name "test_htmlparser.py*" \) -exec chmod 644 {} \;
 # fix python library not stripped
-chmod u+w $RPM_BUILD_ROOT%{_libdir}/libpython%{lib_major}*.so.1.0 $RPM_BUILD_ROOT%{_libdir}/libpython3.so
+chmod u+w %{buildroot}%{_libdir}/libpython%{lib_major}*.so.1.0 %{buildroot}%{_libdir}/libpython3.so
 
 
-mkdir -p $RPM_BUILD_ROOT%{_sysconfdir}/profile.d/
+mkdir -p %{buildroot}%{_sysconfdir}/profile.d/
 
-cat > $RPM_BUILD_ROOT%{_sysconfdir}/profile.d/30python.sh << 'EOF'
+cat > %{buildroot}%{_sysconfdir}/profile.d/30python.sh << 'EOF'
 if [ -f $HOME/.pythonrc.py ] ; then
 	export PYTHONSTARTUP=$HOME/.pythonrc.py
 else
@@ -301,7 +306,7 @@ fi
 export PYTHONDONTWRITEBYTECODE=1
 EOF
 
-cat > $RPM_BUILD_ROOT/%{_sysconfdir}/profile.d/30python.csh << 'EOF'
+cat > %{buildroot}%{_sysconfdir}/profile.d/30python.csh << 'EOF'
 if ( -f ${HOME}/.pythonrc.py ) then
 	setenv PYTHONSTARTUP ${HOME}/.pythonrc.py
 else
@@ -310,7 +315,7 @@ endif
 setenv PYTHONDONTWRITEBYTECODE 1
 EOF
 
-cat > $RPM_BUILD_ROOT%{_sysconfdir}/pythonrc.py << EOF
+cat > %{buildroot}%{_sysconfdir}/pythonrc.py << EOF
 try:
     # this add completion to python interpreter
     import readline
@@ -324,23 +329,21 @@ except:
 # but then, this file will not be sourced
 EOF
 
-%multiarch_includes $RPM_BUILD_ROOT/usr/include/python*/pyconfig.h
+%multiarch_includes %{buildroot}/usr/include/python*/pyconfig.h
 
-mkdir -p $RPM_BUILD_ROOT/%{_sysconfdir}/rpm/macros.d
-install -m644 %{SOURCE2} $RPM_BUILD_ROOT/%{_sysconfdir}/rpm/macros.d/
-
-%clean
-rm -rf $RPM_BUILD_ROOT
+mkdir -p %{buildroot}%{_sysconfdir}/rpm/macros.d
+install -m644 %{SOURCE2} %{buildroot}%{_sysconfdir}/rpm/macros.d/
 
 %files
-%defattr(-, root, root, 755)
-%doc README.mdv
+%doc README.mga
 # conflicts with python2.6
 #%config(noreplace) %{_sysconfdir}/emacs/site-start.d/%{name}.el
 %{_sysconfdir}/rpm/macros.d/*.macros
 %{_sysconfdir}/profile.d/*
 %config(noreplace) %{_sysconfdir}/pythonrc.py
 %{_includedir}/python*/pyconfig.h
+%{multiarch_includedir}/python*/pyconfig.h
+
 %{_libdir}/python*/config*/Makefile
 %exclude %{_libdir}/python*/site-packages/pynche
 %exclude %{_libdir}/python*/lib-dynload/_tkinter.*.so
@@ -386,13 +389,10 @@ rm -rf $RPM_BUILD_ROOT
 %endif
 
 %files -n %{lib_name}
-%defattr(-,root,root)
 %{_libdir}/libpython*.so.1*
 
 %files -n %{develname}
-%defattr(-, root, root, 755)
 %{_libdir}/libpython*.so
-%multiarch_includedir/python*/pyconfig.h
 %{_includedir}/python*
 %{_libdir}/python*/config-%{dirver}*
 %{_libdir}/python*/test/
@@ -403,149 +403,84 @@ rm -rf $RPM_BUILD_ROOT
 %exclude %{_libdir}/python*/config*/Makefile
 
 %files docs
-%defattr(-,root,root,755)
 %doc html/*/*
 %{_datadir}/applications/mandriva-%{name}-docs.desktop
 
 %files -n tkinter3
-%defattr(-, root, root, 755)
 %{_libdir}/python*/tkinter/
 %{_libdir}/python*/idlelib
 %{_libdir}/python*/site-packages/pynche
 %{_libdir}/python*/lib-dynload/_tkinter.*.so
 
 %files -n tkinter3-apps
-%defattr(-, root, root, 755)
 %{_bindir}/idle3*
 %{_bindir}/pynche3
 %{_datadir}/applications/mandriva-tkinter3.desktop
 
-%if %mdkversion < 200900
-%post -n %{lib_name} -p /sbin/ldconfig
-%endif
-%if %mdkversion < 200900
-%postun -n %{lib_name} -p /sbin/ldconfig
-%endif
-
-%if %mdkversion < 200900
-%post -n tkinter3-apps
-%update_menus
-%endif
-
-%if %mdkversion < 200900
-%postun -n tkinter3-apps
-%clean_menus
-%endif
-
-
 
 
 %changelog
-* Sun Aug 14 2011 Funda Wang <fwang@mandriva.org> 3.2.1-2mdv2012.0
-+ Revision: 694447
-- br automake
-- add requires exception
 
-* Tue Jul 12 2011 Funda Wang <fwang@mandriva.org> 3.2.1-1
-+ Revision: 689620
+* Wed Aug 08 2012 luigiwalser <luigiwalser> 3.2.3-5.mga3
++ Revision: 280050
+- add patch from OpenSuSE to fix CVE-2012-2135 (patch 3)
+- add upstream patch adding tests to testsuite associated w/CVE (patch 4)
+
+* Mon Jul 30 2012 tv <tv> 3.2.3-4.mga3
++ Revision: 276244
+- rebuild for db-5.3
+
+* Thu Jul 05 2012 wally <wally> 3.2.3-3.mga3
++ Revision: 268245
+- fix curses module build (mga#6702)
+
+* Tue Jul 03 2012 kamil <kamil> 3.2.3-2.mga3
++ Revision: 266996
+- add P2 fdr-lib64-fix-for-test_install.patch
+- sync P1 with Fedora and fix x86_64 bugs (mga#6664)
+
+* Sat Apr 14 2012 fwang <fwang> 3.2.3-1.mga2
++ Revision: 230764
+- update lib64 patch
+- new version 3.2.3
+
+* Mon Feb 20 2012 guillomovitch <guillomovitch> 3.2.2-3.mga2
++ Revision: 211298
+- don't hardcode pyconfig.h location in lib64 path
+- ship pyconfig.h in main package, not just multiarch wrapper
+- spec cleanup
+
+* Mon Dec 05 2011 fwang <fwang> 3.2.2-2.mga2
++ Revision: 176932
+- add upstream patch to recognize gdbm 1.9 magic value
+- build with gdbm
+- rebuild for new gdbm
+
+* Mon Sep 05 2011 fwang <fwang> 3.2.2-1.mga2
++ Revision: 138550
+- new version 3.2.2
+
+* Fri Sep 02 2011 tv <tv> 3.2.1-2.mga2
++ Revision: 137805
+- make the huge doc subpackage be noarch
+
+* Tue Jul 12 2011 fwang <fwang> 3.2.1-1.mga2
++ Revision: 122718
+- use ln -sf always
+- update file list
+- really rediff lib64 patch
+- rediff lib64 patch
 - new version 3.2.1
 
-* Mon May 02 2011 Funda Wang <fwang@mandriva.org> 3.2-4
-+ Revision: 661885
-- update file list
-- update file list
-- move makefile and pyconfig into main
-- more lib64 patch
+* Sat Jul 02 2011 fwang <fwang> 3.2-6.mga2
++ Revision: 117326
+- rebuild for new tcl
 
-* Sun Apr 24 2011 Funda Wang <fwang@mandriva.org> 3.2-3
-+ Revision: 658191
-- rename devel name
+* Tue Jun 28 2011 fwang <fwang> 3.2-5.mga2
++ Revision: 115157
+- add provides for binary
 
-* Sat Apr 23 2011 Funda Wang <fwang@mandriva.org> 3.2-2
-+ Revision: 656821
-- build with wide-unicode
-
-* Sat Apr 23 2011 Funda Wang <fwang@mandriva.org> 3.2-1
-+ Revision: 656799
-- update file list
-- use space
-- clean spec file
-- rediff lib64 patch
-- rediff lib64 patch
-- new version 3.2
-
-* Mon Nov 01 2010 Funda Wang <fwang@mandriva.org> 3.1.2-4mdv2011.0
-+ Revision: 591289
-- move macro into main package
-
-* Sun Oct 31 2010 Funda Wang <fwang@mandriva.org> 3.1.2-3mdv2011.0
-+ Revision: 591178
-- fix module link
-- drop obsoletes swtich
-- add python3.macros to ease python3 packaging
-- tweak binary name in scripts
-
-* Sat Oct 30 2010 Anssi Hannula <anssi@mandriva.org> 3.1.2-2mdv2011.0
-+ Revision: 590324
-- add provides on python(abi) (as per Fedora), for automated python
-  module dependencies on python version
-- workaround rpm issue in filelist to fix build
-
-  + Per Øyvind Karlsen <peroyvind@mandriva.org>
-    - backport disable pymalloc on valgrind from svn
-
-* Thu Apr 22 2010 Michael Scherer <misc@mandriva.org> 3.1.2-1mdv2010.1
-+ Revision: 537934
-- update to 3.1.2
-- fix cruft in lib64 patch
-
-* Sat Apr 17 2010 Michael Scherer <misc@mandriva.org> 3.1.1-9mdv2010.1
-+ Revision: 536061
-- rebuild for new rpm-mandriva-setup, to fix installation ( #58793 )
-
-* Thu Apr 08 2010 Michael Scherer <misc@mandriva.org> 3.1.1-8mdv2010.1
-+ Revision: 533004
-- rebuild for new rpm-mandriva-setup
-
-* Thu Mar 25 2010 Michael Scherer <misc@mandriva.org> 3.1.1-7mdv2010.1
-+ Revision: 527485
-- rebuild to fix upgrade ( due to python-base removal )
-
-* Fri Feb 05 2010 Michael Scherer <misc@mandriva.org> 3.1.1-6mdv2010.1
-+ Revision: 501053
-- remove BR on emacs as we do not build emacs extension for the moment ( conflict with python 2.x )
-- do not add a BuildRequires on emacs, uneeded for the moment
-- remove old comment
-- use README.mdv, not mdk
-- do not obsolete package that does exist
-- remove redundant BuildRequires
-- do not provides python-base, this should be removed from the distro,
-  as there is no subpackage named like this ( more ever, this is likely to
-  be a wrong provides, as python 3 is too different from python 2 )
-
-* Sun Jan 17 2010 Michael Scherer <misc@mandriva.org> 3.1.1-5mdv2010.1
-+ Revision: 492597
-- fix linking to ncursesw, to fix canto segfaulting
-
-* Sun Jan 03 2010 Michael Scherer <misc@mandriva.org> 3.1.1-4mdv2010.1
-+ Revision: 486004
-- move tkinter module to proper subpackage
-- add patch to fix bug 56260, as python do not detect tcl/tk 8.6, by porting the patch from
-  regular python package to python 3
-
-* Wed Nov 11 2009 Michael Scherer <misc@mandriva.org> 3.1.1-3mdv2010.1
-+ Revision: 464473
-- fix file conflict for tkinteer desktop file, as pointed by laurent pointal on bug  55507
-
-* Tue Aug 18 2009 Eugeni Dodonov <eugeni@mandriva.com> 3.1.1-2mdv2010.0
-+ Revision: 417514
-- updated to 3.1.1
-
-* Fri Jul 24 2009 Bogdano Arendartchuk <bogdano@mandriva.com> 3.1-2mdv2010.0
-+ Revision: 399512
-- adapted the lib64 patch to py3k
-
-  + Eugeni Dodonov <eugeni@mandriva.com>
-    - Packaged python3.
-    - Created package structure for python3.
+* Tue Jun 07 2011 dmorgan <dmorgan> 3.2-4.mga2
++ Revision: 101527
+- imported package python3
 
