@@ -1,0 +1,51 @@
+--- setup.py.link	2012-09-30 00:58:45.000000000 +0800
++++ setup.py	2012-09-30 00:59:06.000000000 +0800
+@@ -579,7 +579,7 @@
+                                libraries=math_libs) )
+ 
+         # time libraries: librt may be needed for clock_gettime()
+-        time_libs = []
++        time_libs = ['m']
+         lib = sysconfig.get_config_var('TIMEMODULE_LIB')
+         if lib:
+             time_libs.append(lib)
+@@ -587,7 +587,7 @@
+         # time operations and variables
+         exts.append( Extension('time', ['timemodule.c'],
+                                libraries=time_libs) )
+-        exts.append( Extension('_datetime', ['_datetimemodule.c']) )
++        exts.append( Extension('_datetime', ['_datetimemodule.c'], libraries=time_libs) )
+         # random number generator implemented in C
+         exts.append( Extension("_random", ["_randommodule.c"]) )
+         # bisect
+@@ -656,7 +656,7 @@
+         # Operations on audio samples
+         # According to #993173, this one should actually work fine on
+         # 64-bit platforms.
+-        exts.append( Extension('audioop', ['audioop.c']) )
++        exts.append( Extension('audioop', ['audioop.c'], libraries=math_libs) )
+ 
+         # readline
+         do_readline = self.compiler.find_library_file(lib_dirs, 'readline')
+@@ -1855,10 +1855,11 @@
+                         include_dirs=include_dirs,
+                         extra_compile_args=extra_compile_args,
+                         extra_link_args=extra_link_args,
+-                        libraries=[],
++                        libraries=['m', 'dl'],
+                         sources=sources,
+                         depends=depends)
+         ext_test = Extension('_ctypes_test',
++			     libraries=['m'],
+                              sources=['_ctypes/_ctypes_test.c'])
+         self.extensions.extend([ext, ext_test])
+ 
+@@ -1909,7 +1910,7 @@
+                                                          'Modules',
+                                                          '_decimal',
+                                                          'libmpdec'))]
+-            libraries = []
++            libraries = ['m']
+             sources = [
+               '_decimal/_decimal.c',
+               '_decimal/libmpdec/basearith.c',
