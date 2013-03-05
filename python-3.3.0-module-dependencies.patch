@@ -1,0 +1,48 @@
+--- Python-3.3.0/Modules/Setup.dist.bero	2013-01-17 14:45:54.954074760 +0100
++++ Python-3.3.0/Modules/Setup.dist	2013-01-17 14:47:07.021245768 +0100
+@@ -166,14 +166,14 @@ _symtable symtablemodule.c
+ #cmath cmathmodule.c _math.c # -lm # complex math library functions
+ #math mathmodule.c _math.c # -lm # math library functions, e.g. sin()
+ #_struct _struct.c	# binary structure packing/unpacking
+-#time timemodule.c # -lm # time operations and variables
++time timemodule.c -lm # time operations and variables
+ #_weakref _weakref.c	# basic weak reference support
+ #_testcapi _testcapimodule.c    # Python C API test module
+ #_random _randommodule.c	# Random number generator
+ #atexit atexitmodule.c      # Register functions to be run at interpreter-shutdown
+ #_elementtree -I$(srcdir)/Modules/expat -DHAVE_EXPAT_CONFIG_H -DUSE_PYEXPAT_CAPI _elementtree.c	# elementtree accelerator
+ #_pickle _pickle.c	# pickle accelerator
+-#_datetime _datetimemodule.c	# datetime accelerator
++_datetime _datetimemodule.c -lm	# datetime accelerator
+ #_bisect _bisectmodule.c	# Bisection algorithms
+ #_heapq _heapqmodule.c	# Heap queue algorithm
+ 
+@@ -216,7 +216,7 @@ _symtable symtablemodule.c
+ # Some more UNIX dependent modules -- off by default, since these
+ # are not supported by all UNIX systems:
+ 
+-#nis nismodule.c -lnsl	# Sun yellow pages -- not everywhere
++nis nismodule.c -ltirpc -lnsl	# Sun yellow pages -- not everywhere
+ #termios termios.c	# Steen Lumholt's termios module
+ #resource resource.c	# Jeremy Hylton's rlimit interface
+ 
+--- Python-3.3.0/setup.py.bero	2013-01-17 14:48:25.702340762 +0100
++++ Python-3.3.0/setup.py	2013-01-17 14:49:32.040577716 +0100
+@@ -1901,7 +1901,7 @@ class PyBuildExt(build_ext):
+         undef_macros = []
+         if '--with-system-libmpdec' in sysconfig.get_config_var("CONFIG_ARGS"):
+             include_dirs = []
+-            libraries = ['mpdec']
++            libraries = ['mpdec', 'm']
+             sources = ['_decimal/_decimal.c']
+             depends = ['_decimal/docstrings.h']
+         else:
+@@ -1910,7 +1910,7 @@ class PyBuildExt(build_ext):
+                                                          'Modules',
+                                                          '_decimal',
+                                                          'libmpdec'))]
+-            libraries = []
++            libraries = ['m']
+             sources = [
+               '_decimal/_decimal.c',
+               '_decimal/libmpdec/basearith.c',
